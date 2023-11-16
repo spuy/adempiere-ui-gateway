@@ -1,78 +1,80 @@
 version: "0.0.1"
 # Example API for images
 services:
-  adempiere.database:
-    build:
-      context: postgresql/
-      dockerfile: Dockerfile
-    container_name: ${POSTGRES_NAME}
-    image: ${POSTGRES_NAME}
-    restart: ${GENERIC_RESTART}
-    volumes:
-      - volume_postgres:/var/lib/postgresql/data
-    healthcheck:
-      test: "bash -c 'printf \"GET / HTTP/1.1\n\n\" > /dev/tcp/127.0.0.1/5432; exit $?;'"
-      interval: 10s
-      retries: 60
-      start_period: 20s
-      timeout: 10s
-    environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    networks:
-      - shared_network
+#  adempiere.database:
+#    build:
+#      context: postgresql/
+#      dockerfile: Dockerfile
+#    container_name: ${POSTGRES_NAME}
+#    image: ${POSTGRES_NAME}
+#    restart: ${GENERIC_RESTART}
+#    volumes:
+#      - volume_postgres:/var/lib/postgresql/data
+#    healthcheck:
+#      test: "bash -c 'printf \"GET / HTTP/1.1\n\n\" > /dev/tcp/127.0.0.1/5432; exit $?;'"
+#      interval: 10s
+#      retries: 60
+#      start_period: 20s
+#      timeout: 10s
+#    environment:
+#      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+#    networks:
+#      - shared_network
 
-  adempiere.grpc.server:
-    image: ${ADEMPIERE_GRPC_SERVER_IMAGE}
-    container_name: ${ADEMPIERE_GRPC_HOST}
-    restart: ${GENERIC_RESTART}
-    healthcheck:
-      test: "bash -c 'printf \"GET / HTTP/1.1\n\n\" > /dev/tcp/127.0.0.1/50059; exit $?;'"
-      interval: 10s
-      retries: 60
-      start_period: 20s
-      timeout: 10s
-    environment:
-      DB_HOST: ${POSTGRES_NAME}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-      SERVICES_ENABLED: ${SERVICES_ENABLED}
-    depends_on:
-      adempiere.database:
-        condition: service_healthy
-    networks:
-      - shared_network
+#  adempiere.grpc.server:
+#    image: ${ADEMPIERE_GRPC_SERVER_IMAGE}
+#    container_name: ${ADEMPIERE_GRPC_HOST}
+#    restart: ${GENERIC_RESTART}
+#    healthcheck:
+#      test: "bash -c 'printf \"GET / HTTP/1.1\n\n\" > /dev/tcp/127.0.0.1/50059; exit $?;'"
+#      interval: 10s
+#      retries: 60
+#      start_period: 20s
+#      timeout: 10s
+#    environment:
+#      DB_HOST: ${POSTGRES_NAME}
+#      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+#      SERVICES_ENABLED: ${SERVICES_ENABLED}
+#    depends_on:
+#      adempiere.database:
+#        condition: service_healthy
+#    networks:
+#      - shared_network
 
-  adempiere.middleware:
-    image: ${ADEMPIERE_MIDDLEWARE_IMAGE}
-    container_name: ${ADEMPIERE_MIDDLEWARE_HOST}
-    restart: ${GENERIC_RESTART}
-    healthcheck:
-      test: "bash -c 'printf \"GET / HTTP/1.1\n\n\" > /dev/tcp/127.0.0.1/50059; exit $?;'"
-      interval: 10s
-      retries: 60
-      start_period: 20s
-      timeout: 10s
-    environment:
-      DB_HOST: ${POSTGRES_NAME}
-      SERVER_PORT: ${ADEMPIERE_MIDDLEWARE_PORT}
-    depends_on:
-      adempiere.database:
-        condition: service_healthy
-    networks:
-      - shared_network
+# No necesario para desplegar
+#
+#  adempiere.middleware:
+#    image: ${ADEMPIERE_MIDDLEWARE_IMAGE}
+#    container_name: ${ADEMPIERE_MIDDLEWARE_HOST}
+#    restart: ${GENERIC_RESTART}
+#    healthcheck:
+#      test: "bash -c 'printf \"GET / HTTP/1.1\n\n\" > /dev/tcp/127.0.0.1/50059; exit $?;'"
+#      interval: 10s
+#      retries: 60
+#      start_period: 20s
+#      timeout: 10s
+#    environment:
+#      DB_HOST: ${POSTGRES_NAME}
+#      SERVER_PORT: ${ADEMPIERE_MIDDLEWARE_PORT}
+#    networks:
+#      - shared_network
 
+  # Codifica grpc a json
   grpc.proxy:
       image: ${ENVOY_IMAGE_NAME}
       container_name: ${ENVOY_NAME}
       volumes:
           - ./envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
           - ./envoy/definitions/adempiere-grpc-server.pb:/data/adempiere-grpc-server.pb:ro
+          #- /<path_to_backend_source_on_local>/build/descriptors/adempiere-grpc-server.pb:/data/adempiere-grpc-server.pb:ro
           - ./envoy/definitions/adempiere-middleware.pb:/data/adempiere-middleware.pb:ro
-      depends_on:
-        - adempiere.grpc.server
-        - adempiere.middleware
+#      depends_on:
+#        - adempiere.grpc.server
+#        - adempiere.middleware
       networks:
         - shared_network
 
+  # proxy enrutador a donde se conecta al envoy
   ui.gateway:
       image: ${NGINX_IMAGE_NAME}
       container_name: ${NGINX_NAME}
@@ -89,6 +91,14 @@ services:
           #- ./keys/api_keys.conf:/etc/nginx/api_keys.conf
       networks:
         - shared_network
+
+  vue-app:
+      image: solopcloud/adempiere-vue:alpine-3.2.0
+      ports:
+        - 9091:80
+      environment:
+        - API_URL=http://192.168.13.120:9092/api/
+
 
 networks:
   shared_network:
